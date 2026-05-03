@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>hit</title>
+<script>
+const params = new URLSearchParams(location.search);
+const data = {
+  round: params.get("round"),
+  ch: params.get("ch"),
+  q: params.get("q"),
+  ts: Date.now()
+};
+
+try {
+  localStorage.setItem("findit-hit", JSON.stringify(data));
+} catch (_) {}
+
+try {
+  const channel = new BroadcastChannel("findit-hit-channel");
+  channel.postMessage(data);
+} catch (_) {}
+
+setTimeout(() => close(), 250);
+</script>
+ok

